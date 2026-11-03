@@ -1,0 +1,59 @@
+
+name: Build VoidTube IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cat > project.yml <<'EOF'
+          name: VoidTube
+          options:
+            deploymentTarget:
+              iOS: "12.0"
+          targets:
+            VoidTube:
+              type: application
+              platform: iOS
+              sources:
+                - AppDelegate.swift
+                - ViewController.swift
+              info:
+                path: Info.plist
+          EOF
+          xcodegen generate
+
+      - name: Build IPA
+        run: |
+          xcodebuild \
+            -project VoidTube.xcodeproj \
+            -scheme VoidTube \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/VoidTube.xcarchive \
+            CODE_SIGNING_ALLOWED=NO archive
+
+          mkdir -p build/Payload
+          cp -R build/VoidTube.xcarchive/Products/Applications/VoidTube.app build/Payload/
+          cd build
+          zip -r VoidTube.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoidTube-IPA
+          path: build/VoidTube.ipa
+          
