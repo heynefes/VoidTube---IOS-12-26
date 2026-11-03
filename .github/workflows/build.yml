@@ -4,25 +4,37 @@ name: Build VoidTube IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
 
 jobs:
   build:
-    runs-on: macos-14
+    name: Build iPhone 6 IPA
+    runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Xcode
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          brew install xcodegen
 
       - name: Generate Xcode project
         run: |
           cat > project.yml <<'EOF'
           name: VoidTube
+
           options:
             deploymentTarget:
               iOS: "12.0"
+
           targets:
             VoidTube:
               type: application
@@ -32,10 +44,17 @@ jobs:
                 - ViewController.swift
               info:
                 path: Info.plist
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.voidtube.app
+                  IPHONEOS_DEPLOYMENT_TARGET: "12.0"
+                  TARGETED_DEVICE_FAMILY: "1"
+                  SWIFT_VERSION: "5.0"
           EOF
+
           xcodegen generate
 
-      - name: Build IPA
+      - name: Build and archive
         run: |
           xcodebuild \
             -project VoidTube.xcodeproj \
@@ -44,10 +63,17 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath build/VoidTube.xcarchive \
-            CODE_SIGNING_ALLOWED=NO archive
+            CODE_SIGNING_ALLOWED=NO \
+            archive
 
+      - name: Package IPA
+        run: |
           mkdir -p build/Payload
-          cp -R build/VoidTube.xcarchive/Products/Applications/VoidTube.app build/Payload/
+
+          cp -R \
+            build/VoidTube.xcarchive/Products/Applications/VoidTube.app \
+            build/Payload/
+
           cd build
           zip -r VoidTube.ipa Payload
 
@@ -56,4 +82,4 @@ jobs:
         with:
           name: VoidTube-IPA
           path: build/VoidTube.ipa
-          
+          if-no-files-found: error
